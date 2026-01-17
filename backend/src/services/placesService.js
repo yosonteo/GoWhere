@@ -1,4 +1,3 @@
-import { vibeToTypes } from "../utils/vibeMap.js";
 import { scorePlace } from "./scoreService.js";
 
 /**
@@ -23,10 +22,32 @@ const MOCK_PLACES = [
 /**
  * Returns up to 3 suggested stops for MVP
  */
-export async function getSuggestedStops({ vibe, lat, lng, time }) {
-  // Default to chill if unknown vibe
-  const selectedVibe = vibeToTypes[vibe] ? vibe : "chill";
-  const allowedTypes = vibeToTypes[selectedVibe];
+export async function getSuggestedStops({ vibe = "chill", lat, lng, time }) {
+  console.log(`Getting suggestions for vibe: ${vibe}`);
+
+  // Step 1: Call the AI service to get categories for the vibe
+  let allowedTypes = [];
+  try {
+    const aiServiceUrl = "http://localhost:8008/categories";
+    const response = await fetch(aiServiceUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vibe }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI service returned status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    allowedTypes = data.categories || [];
+    console.log(`AI suggested categories: ${allowedTypes.join(", ")}`);
+
+  } catch (error) {
+    console.error("Error fetching categories from AI service:", error);
+    // Fallback to a default set of categories if AI service fails
+    allowedTypes = ["cafe", "park", "restaurant"];
+  }
 
   // Filter places by allowed types
   const filtered = MOCK_PLACES.filter(p => allowedTypes.includes(p.type));
@@ -61,5 +82,45 @@ export async function getSuggestedStops({ vibe, lat, lng, time }) {
     }
   }
 
-  return result;
+  // Step 3: Get AI explanations for each of the top 3 places
+  const explanationPromises = result.map(async (place) => {
+    try {
+      console.log(`Getting AI explanation for ${place.name}...`);
+      const aiServiceUrl = "http://localhost:8008/explanation";
+      const response = await fetch(aiServiceUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vibe,
+          place_details: {
+            name: place.name,
+            types: [place.type],
+            rating: place.rating,
+            user_ratings_total: place.reviews,
+            reviews: [] // Sending empty reviews for now, as per mock data
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`AI explanation service returned status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        ...place,
+        explanation: data.explanation || "No explanation available.",
+      };
+    } catch (error) {
+      console.error(`Error fetching explanation for ${place.name}:`, error);
+      return {
+        ...place,
+        explanation: "Could not generate an explanation at this time.",
+      };
+    }
+  });
+
+  const stopsWithExplanations = await Promise.all(explanationPromises);
+
+  return stopsWithExplanations;
 }
