@@ -6,6 +6,13 @@ module.exports = {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
+      colors: {
+        'custom-yellow': '#ffde59',
+        'custom-orange': '#ff914d',
+      },
+      backgroundImage: {
+        'gradient-custom': 'linear-gradient(90deg, #ffde59, #ff914d)',
+      },
     },
   },
   plugins: [],
