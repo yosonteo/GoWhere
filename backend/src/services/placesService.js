@@ -3,7 +3,11 @@ import { scorePlace } from "./scoreService.js";
 
 const client = new Client({});
 const SEARCH_RADIUS = 5000; // 5km
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8008";
+
+// Construct the AI Service URL from the host provided by Render, with a fallback for local development
+const AI_SERVICE_HOST = process.env.AI_SERVICE_HOST;
+const AI_SERVICE_URL = AI_SERVICE_HOST ? `https://${AI_SERVICE_HOST}` : "http://localhost:8008";
+
 
 /**
  * Geocodes a location string to latitude and longitude.

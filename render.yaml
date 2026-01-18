@@ -15,8 +15,8 @@ services:
     buildCommand: "npm install"
     startCommand: "npm start"
     envVars:
-      - key: AI_SERVICE_URL
+      - key: AI_SERVICE_HOST # Provide the host of the AI service
         fromService:
           type: web
           name: gowhere-ai
-          property: url
+          property: host # 'host' is a valid property

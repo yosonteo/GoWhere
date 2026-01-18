@@ -8,7 +8,10 @@ import routeRouter from "./routes/route.js";
 dotenv.config();
 
 const app = express();
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8008";
+
+// Construct the AI Service URL from the host provided by Render, with a fallback for local development
+const AI_SERVICE_HOST = process.env.AI_SERVICE_HOST;
+const AI_SERVICE_URL = AI_SERVICE_HOST ? `https://${AI_SERVICE_HOST}` : "http://localhost:8008";
 
 // Middleware
 app.use(cors());
