@@ -1,11 +1,11 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+dotenv.config(); // Moved to the top to ensure environment variables are loaded first
 
 import placesRouter from "./routes/places.js";
 import routeRouter from "./routes/route.js";
 
-dotenv.config();
 
 const app = express();
 

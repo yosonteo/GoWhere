@@ -1,13 +1,9 @@
 import { Client } from "@googlemaps/google-maps-services-js";
 import { scorePlace } from "./scoreService.js";
+import { getCategoriesForVibe, generateExplanation } from "../ai/aiService.js";
 
 const client = new Client({});
 const SEARCH_RADIUS = 5000; // 5km
-
-// Construct the AI Service URL from the host provided by Render, with a fallback for local development
-const AI_SERVICE_HOST = process.env.AI_SERVICE_HOST;
-const AI_SERVICE_URL = AI_SERVICE_HOST ? `https://${AI_SERVICE_HOST}` : "http://localhost:8008";
-
 
 /**
  * Geocodes a location string to latitude and longitude.
@@ -39,27 +35,6 @@ async function geocodeLocation(location) {
 }
 
 /**
- * Fetches place categories from the AI service.
- */
-async function getCategoriesFromAI(vibe) {
-  console.log(`Getting categories for vibe: '${vibe}'...`);
-  try {
-    const response = await fetch(`${AI_SERVICE_URL}/categories`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vibe }),
-    });
-    if (!response.ok) throw new Error(`AI service returned status: ${response.status}`);
-    const data = await response.json();
-    console.log(`AI suggested categories: ${data.categories?.join(", ")}`);
-    return data.categories || [];
-  } catch (error) {
-    console.error("Error fetching categories from AI service, using fallback.", error.message);
-    return ["cafe", "park", "restaurant"]; // Fallback categories
-  }
-}
-
-/**
  * Fetches places from Google Places API based on a list of types.
  */
 async function fetchPlacesFromGoogle(lat, lng, types) {
@@ -76,7 +51,7 @@ async function fetchPlacesFromGoogle(lat, lng, types) {
       timeout: 2000, // ms for each request
     }).catch(e => {
       console.error(`Google Places API error for type '${type}':`, e.response?.data?.error_message || e.message);
-      return null; // Return null on error to avoid breaking Promise.all
+      return null;
     });
   });
 
@@ -113,11 +88,13 @@ export async function getSuggestedStops({ vibe = "chill", location, stops = 10 }
   const { lat, lng } = await geocodeLocation(location);
 
   // 1. Get categories from our AI service
-  const allowedTypes = await getCategoriesFromAI(vibe);
+  console.log(`Getting categories for vibe: '${vibe}'...`);
+  const allowedTypes = await getCategoriesForVibe(vibe);
   if (!allowedTypes || allowedTypes.length === 0) {
-    console.log("No categories returned from AI, returning empty list.");
-    return [];
+    console.log("No categories returned from AI, using fallback.");
+    allowedTypes = ["cafe", "park", "restaurant"];
   }
+  console.log(`AI suggested categories: ${allowedTypes.join(", ")}`);
 
   // 2. Fetch a list of unique places from Google based on these categories
   const places = await fetchPlacesFromGoogle(lat, lng, allowedTypes);
@@ -134,39 +111,15 @@ export async function getSuggestedStops({ vibe = "chill", location, stops = 10 }
 
   // 5. Get AI explanations for each of the top places in parallel
   const explanationPromises = topPlaces.map(async (place) => {
-    try {
-      console.log(`Getting AI explanation for ${place.name}...`);
-      const response = await fetch(`${AI_SERVICE_URL}/explanation`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vibe,
-          place_details: {
-            name: place.name,
-            types: [place.type],
-            rating: place.rating,
-            user_ratings_total: place.reviews,
-            reviews: []
-          }
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`AI explanation service returned status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return {
-        ...place,
-        explanation: data.explanation || "No explanation available.",
-      };
-    } catch (error) {
-      console.error(`Error fetching explanation for ${place.name}:`, error);
-      return {
-        ...place,
-        explanation: "Could not generate an explanation at this time.",
-      };
-    }
+    console.log(`Getting AI explanation for ${place.name}...`);
+    const explanation = await generateExplanation({
+      name: place.name,
+      types: [place.type],
+      rating: place.rating,
+      reviews: place.reviews, // Pass review count
+    }, vibe);
+    
+    return { ...place, explanation };
   });
 
   const placesWithExplanations = await Promise.all(explanationPromises);
